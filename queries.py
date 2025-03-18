@@ -72,4 +72,39 @@
     }
   }
 ]
+
+// 4. Affichez un histogramme qui permet de visualiser le nombres de films par année.
+// 5. Quelles sont les genres de films disponibles dans la base.
+[ {
+  /**
+  * Divide the arrays of more than 1 genre into different genres
+  */
+    "$project": {
+      "genre": { "$split": ["$genre", ","] }
+    }
+  },
+  /**
+  * Separate the genres individually
+  */
+  {
+    "$unwind": "$genre"
+  },
+  /** 
+  * Group films by genre unique. It eliminates duplicates
+  */
+  {
+    "$group": {
+      "_id": "$genre"
+    }
+  },
+  /** 
+  * Return the results in alphabetic order
+  */
+  {
+    "$sort": { "_id": 1 }
+  }
+]  
+
+// 6. Quel est le film qui a généré le plus de revenu.
+
  
