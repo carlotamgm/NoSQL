@@ -1,0 +1,6 @@
+streamlit
+pymongo
+pandas
+matplotlib
+seaborn
+neo4j
