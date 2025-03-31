@@ -13,26 +13,13 @@ st.sidebar.title("MongoDB")
 mongodb_host = st.sidebar.text_input("MongoDB Host URI")
 
 # Collect database name
-mongodb_database = "entertainment"
+mongodb_database = st.sidebar.text_input("Database Name")
 
 # Collect collection name
-mongodb_collection = "films"
+mongodb_collection = st.sidebar.text_input("Collection Name")
 
+# Introduce a default case
 collection = None
-
-# Import data from json file
-decoder = json.JSONDecoder()
-with open('movies.json') as f:
-    movies_data = f.read()
-    pos = 0
-    movies = []
-    while pos < len(movies_data):
-        try:
-            movie, pos = decoder.raw_decode(movies_data, pos)
-            movies.append(movie)
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON: {e}")
-            break
 
 # Launch an instance of the MongoDB databse when each requirement is fulfilled
 if mongodb_host and mongodb_database and mongodb_collection:
@@ -49,16 +36,4 @@ st.header("MongoDB Shell")
 st.markdown("Enter MongoDB command in MQL format")
 user_input = st.text_area("MongoDB Query", height=100)
 
-# Mongo query
-if user_input:
-    try:
-        # Execute the query
-        result = collection.command(user_input) if user_input else None
-
-        # Display the result
-        if result:
-            st.json(result)
-        else:
-            st.info("No results found.")
-    except Exception as e:
-        st.error(f"Error executing query: {e}")
+# Handle the input and display the returned result
