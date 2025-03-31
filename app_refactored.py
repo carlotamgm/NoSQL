@@ -56,7 +56,7 @@ if st.button("Run Command"):
                 result = list(result)
 
             st.success("Query executed successfully.")
-            st.json(result)
+            st.write(result)
 
             # Display result as a table if it's a list of documents
             if isinstance(result, list) and len(result) > 0:
