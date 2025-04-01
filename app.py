@@ -11,25 +11,13 @@ import pandas as pd
 database_mode = st.sidebar.radio("Select Database", ["MongoDB", "Neo4j"]) # Create a selector for either MongoDB or Neo4j
 collection = None  # Initialize collection variable
 
-
+# Executes MongoDB queries based on the selected query name and on its type (aggregate, count, find)
 def execute_mongo_query(
     collection,
     query_name: str,
     limit: int = None,
     result_as_dataframe: bool = True
 ):
-    """
-    Execute a predefined MongoDB query
-    
-    Args:
-        collection: MongoDB collection object
-        query_name: Key from QUERIES dictionary
-        limit: Optional limit for find queries
-        result_as_dataframe: Return results as pandas DataFrame
-        
-    Returns:
-        Query results in requested format
-    """
     if query_name not in QUERIES:
         raise ValueError(f"Unknown query: {query_name}")
     
@@ -120,7 +108,7 @@ if database_mode == "MongoDB":
     mongodb_collection = DB_COLLECTION
     collection = None
 
-    # Conexión a MongoDB
+    # Connection to MongoDB
     if mongodb_host and mongodb_database and mongodb_collection: 
         try:
             client = MongoClient(mongodb_host)
@@ -130,7 +118,6 @@ if database_mode == "MongoDB":
         except Exception as e:
             st.error(f"Failed to connect to MongoDB: {e}")
 
-    # Sección para queries predefinidas
     st.header("Predefined MongoDB Queries")
     
     # Crear opciones para el selectbox
@@ -148,7 +135,7 @@ if database_mode == "MongoDB":
     query_key = query_options[selected_query_label]
     query_info = QUERIES[query_key]
     
-    # Añadir parámetros adicionales según el tipo de query
+    # Add limit parameter to find queries
     limit = None
     if query_info["type"] == "find":
         limit = st.number_input(
@@ -158,7 +145,7 @@ if database_mode == "MongoDB":
             value=10
         )
     
-    # Botón para ejecutar la query predefinida
+    # Button to execute predefined queries
     if st.button(f"Execute: {selected_query_label.split(' (')[0]}"):
         if collection is None:
             st.error("No MongoDB connection established")
@@ -170,20 +157,23 @@ if database_mode == "MongoDB":
                     limit=limit
                 )
                 
-                # Mostrar resultados según el tipo de query
+                # Show results of query
                 if query_info["type"] == "count":
                     st.metric(label=query_info["description"], value=result)
+                # Query 4: Create an histogram with the number of films per year
+                if query_key == "films_per_year":
+                    st.write(result)
+                    plt.figure(figsize=(12, 6))
+                    sns.barplot(x=result["_id"], y=result["titles"].apply(len), color="blue")
+                    plt.xticks(rotation=45)
+                    plt.xlabel("Year")
+                    plt.ylabel("Number of Films")
+                    plt.title("Number of Films Released per Year")
+
+                    st.pyplot(plt)
                 elif isinstance(result, pd.DataFrame):
                     st.dataframe(result)
-                    
-                    # Visualizaciones especiales para ciertas queries
-                    if query_key == "year_with_most_films" and not result.empty:
-                        st.write(f"🎬 Year with most releases: {result.iloc[0]['_id']}")
-                        st.write(f"📊 Total films: {result.iloc[0]['count']}")
-                    
-                    elif query_key == "avg_votes_2007" and not result.empty:
-                        st.write(f"⭐ Average votes: {result.iloc[0]['averageVotes']:.2f}")
-                
+            
                 else:
                     st.json(result)
                     
