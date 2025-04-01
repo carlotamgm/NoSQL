@@ -9,15 +9,11 @@ import json
 # Create sidebars with inputs for both MongoDB and Neo4j
 database_mode = st.sidebar.radio("Select Database", ["MongoDB", "Neo4j"]) # Create a selector for either MongoDB or Neo4j
 
-'''
-Create UI with logic for each switchable case
-'''
-
 # Database mode case for MongoDB
 if database_mode == "MongoDB":
 
     st.sidebar.title("MongoDB") # Add a sidebar title label for MongoDB
-    mongodb_host = st.sidebar.text_input("MongoDB Host URI") # Collect the host URI
+    mongodb_host = st.sidebar.text_input("Host URI") # Collect the host URI
     mongodb_database = st.sidebar.text_input("Database Name") # Collect database name
     mongodb_collection = st.sidebar.text_input("Collection Name") # Collect collection name
     collection = None # Introduce a default collection case
@@ -51,7 +47,7 @@ if database_mode == "MongoDB":
         # Run the query
         else:
             try:
-                
+
                 # Restrict eval to only the collection object as to prevent malicious queries
                 safe_globals = {"__builtins__": {}}
                 safe_locals = {"collection": collection}
@@ -89,7 +85,7 @@ if database_mode == "MongoDB":
 elif database_mode == "Neo4j":
 
     st.sidebar.title("Neo4j") # Add a sidebar title label for Neo4j
-    neo4j_host = st.sidebar.text_input("Neo4j Host URI") # Collect the host URI
+    neo4j_host = st.sidebar.text_input("Host URI") # Collect the host URI
     neo4j_username = st.sidebar.text_input("Username") # Collect username
     neo4j_password = st.sidebar.text_input("Password", type="password") # Collect password
 
