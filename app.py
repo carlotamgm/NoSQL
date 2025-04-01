@@ -1,6 +1,8 @@
 import streamlit as st
 from config import MONGODB_URI, DB_NAME, DB_COLLECTION, NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
 from mongodb_queries import QUERIES  # Import the QUERIES dictionary from mongodb_queries.py
+from neo4j_queries import QUERIES as NEO4J_QUERIES  # Import the QUERIES dictionary from neo4j_queries.py
+from neo4j_nodes import import_to_neo4j  # Import the function to export data from MongoDB to Neo4
 from pymongo import MongoClient
 from neo4j import GraphDatabase
 import matplotlib.pyplot as plt
@@ -43,61 +45,6 @@ def execute_mongo_query(
     
     except Exception as e:
         raise Exception(f"Error executing {query_name}: {str(e)}")
-
-# Imports data from MongoDB to Neo4j
-def import_to_neo4j(driver, mongo_data):
-    with driver.session() as session:
-        for doc in mongo_data:
-            try:
-                # Asegurarse de que los campos requeridos existan
-                film_id = str(doc.get("_id", ""))
-                title = doc.get("title", "Unknown Title")
-                year = doc.get("year", 0)
-                votes = doc.get("Votes", 0)
-                revenue = doc.get("Revenue", 0)
-                rating = doc.get("rating", 0.0)
-                
-                # Validar tipos de datos
-                try:
-                    year = int(year) if year else 0
-                except (ValueError, TypeError):
-                    year = 0
-                
-                # Node Films (con manejo de campos faltantes)
-                session.run("""
-                    MERGE (f:Film {id: $id})
-                    SET f.title = $title,
-                        f.year = $year,
-                        f.Votes = $votes,
-                        f.Revenue = $revenue,
-                        f.rating = $rating
-                """, id=film_id, title=title, year=year, votes=votes, 
-                    revenue=revenue, rating=rating)
-
-                # Nodes Réalisateur and relation (solo si existe director)
-                if "director" in doc and doc["director"]:
-                    director = doc["director"]
-                    session.run("""
-                        MERGE (r:Realisateur {name: $director})
-                        MERGE (f:Film {id: $id})
-                        MERGE (r)-[:A_REALISE]->(f)
-                    """, director=director, id=film_id)
-
-                # Nodes Acteurs and relation (solo si existen actores)
-                actors = doc.get("actors", [])
-                if isinstance(actors, list):
-                    for actor in actors:
-                        if actor:  # Solo si el nombre no está vacío
-                            session.run("""
-                                MERGE (a:Actor {name: $actor})
-                                MERGE (f:Film {id: $id})
-                                MERGE (a)-[:A_JOUE]->(f)
-                            """, actor=actor, id=film_id)
-
-            except Exception as e:
-                st.error(f"Erreur lors de l'importation du document {doc.get('_id', 'inconnu')}: {e}")
-                st.error(f"Document problématique: {doc}")
-
 
 st.header("NoSQL Project - MongoDB and Neo4j Integration")
 
@@ -247,7 +194,7 @@ elif database_mode == "Neo4j":
                     with st.spinner("Importing data..."):
                         import_to_neo4j(driver, collection.find())
                     st.success("Data imported successfully!")
-                    
+
             except Exception as e:
                 st.error(f"Failed to connect to MongoDB: {e}")
             
@@ -260,7 +207,58 @@ elif database_mode == "Neo4j":
     st.markdown("Enter a Neo4j query in Cypher format")
     neo4j_input = st.text_area("Cypher Query", height=100)
 
-    # Button to execute queries
+    st.header("Predefined Neo4j Queries")
+    
+    # Crear opciones para el selectbox
+    query_options = {
+        f"{v['description']} ({k})": k 
+        for k, v in NEO4J_QUERIES.items()
+    }
+    
+    selected_query_label = st.selectbox(
+        "Choose a predefined query:",
+        options=list(query_options.keys())
+    )
+    
+    # Obtener la clave real de la query seleccionada
+    query_key = query_options[selected_query_label]
+    query_info = NEO4J_QUERIES[query_key]
+    
+    # Add limit parameter to find queries
+    limit = None
+    if query_info["type"] == "find":
+        limit = st.number_input(
+            "Maximum results to show", 
+            min_value=1, 
+            max_value=1000, 
+            value=10
+        )
+    
+    # Button to execute predefined queries
+    if st.button(f"Execute: {selected_query_label.split(' (')[0]}"):
+        if collection is None:
+            st.error("No Neo4j connection established")
+        else:
+            try:
+                with driver.session() as session:
+                    result = session.run(query_info["query"])  # Execute the Cypher query
+                    data = list(result)  # Transform result into a list of dictionaries
+                
+                # Show results of query
+                if query_info["type"] == "count":
+                    st.metric(label=query_info["description"], value=result)
+            
+                elif isinstance(result, pd.DataFrame):
+                    st.dataframe(result)
+            
+                else:
+                    st.json(result)
+                    
+            except Exception as e:
+                st.error(f"Error executing query: {str(e)}")
+
+
+    # Button to execute queries 
     if st.button("Run Cypher Command"):
         if driver is None:
             st.error("No active Neo4j connection.") 

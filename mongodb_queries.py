@@ -1,7 +1,6 @@
 # mongodb_queries.py
 from typing import Union, Dict, List
 
-# Definición de tipos para mayor claridad
 MongoQuery = Union[Dict, List[Dict]]
 
 QUERIES = {
@@ -14,6 +13,7 @@ QUERIES = {
             {"$limit": 1}
         ]
     },
+    #TODO/TOFIX
     "films_after_1999": {
         "description": "Count films released after 1999",
         "type": "count",
@@ -114,6 +114,7 @@ QUERIES = {
             {"$limit": 1}
         ]
     },
+    #TODO/TOFIX
     "top_rated_by_decade": {
         "description": "Top 3 highest rated films by decade",
         "type": "aggregate",
@@ -201,6 +202,7 @@ QUERIES = {
             }
         ]
     },
+    #TODO/TOFIX
     "runtime_revenue_correlation_data": {
         "description": "Calculate the correlation between film runtime and revenue",
         "type": "find",
