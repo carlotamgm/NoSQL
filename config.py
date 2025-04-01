@@ -1,0 +1,6 @@
+DB_COLLECTION = "films"
+DB_NAME = "entertainment"
+MONGODB_URI = "mongodb://localhost:27017/"
+NEO4J_URI= "bolt://54.209.65.220"
+NEO4J_USERNAME = "neo4j"
+NEO4J_PASSWORD = "nozzle-adhesives-jugs"
