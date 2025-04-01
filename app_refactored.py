@@ -38,13 +38,16 @@ user_input = st.text_area("MongoDB Query", height=100)
 
 # Handle the input and display the returned result
 if st.button("Run Command"):
+    # Check if the collection exists
     if collection is None:
-        st.error("No collection selected.")
+        st.error("No collection selected.") # No collection warning
+    # Check for whitespace in entry
     elif not user_input.strip():
-        st.warning("Please enter a MongoDB command.")
+        st.warning("Please enter a MongoDB command.") # No entry warning
+    # Run the query
     else:
         try:
-            # Restrict eval to only the collection object
+            # Restrict eval to only the collection object as to prevent malicious queries
             safe_globals = {"__builtins__": {}}
             safe_locals = {"collection": collection}
 
@@ -55,20 +58,24 @@ if st.button("Run Command"):
             if hasattr(result, "__iter__") and not isinstance(result, dict):
                 result = list(result)
 
-            st.success("Query executed successfully.")
-            st.write(result)
+            st.success("Query executed successfully.") # Output a success flag when the query runs without errors
+            st.write(result) # Write the query to MongoDB
 
             # Display result as a table if it's a list of documents
             if isinstance(result, list) and len(result) > 0:
-                df = pd.DataFrame(result)
-                st.dataframe(df)
+                df = pd.DataFrame(result) # Instantiate the datafram based on query result data
+                st.dataframe(df) # Display the dataframe on streamlit
 
-                # Optional histogram if 'year' is a field
-                if "year" in df.columns:
-                    st.subheader("Histogram: Number of Items per Year")
-                    fig, ax = plt.subplots()
-                    sns.histplot(df["year"].dropna(), bins=20, ax=ax)
-                    st.pyplot(fig)
+                # Plot a histogram only if 'year' is in the result and numeric
+                if "year" in df.columns and pd.api.types.is_numeric_dtype(df["year"]):
+                    st.subheader("Number of Films Per Year")
+                    figure, axes = plt.subplots()  # Create the plot canvas
+                    sns.histplot(df["year"].dropna(), bins=20, discrete=True, ax=axes)  # Plot histogram for 'year'
+                    axes.set_xlabel("Year")  # Label x-axis with 'Year'
+                    axes.set_ylabel("Number of Films")  # Generic y-axis label
+                    st.pyplot(figure)  # Display the plot in Streamlit
+                else:
+                    st.info("No numeric 'year' field found in the query result.")
 
         except Exception as e:
             st.error(f"Error executing command: {e}")
