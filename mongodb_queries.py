@@ -27,7 +27,7 @@ QUERIES = {
             {"$group": {"_id": None, "averageVotes": {"$avg": "$Votes"}}}
         ]
     },
-   "films_per_year": {
+    "films_per_year": {
     "description": "Films per year",
     "type": "aggregate",
     "query": [
@@ -189,5 +189,62 @@ QUERIES = {
             }
         ]
     },
-
+    "high_rating_high_revenue": {
+        "description": "Create a MongoDB view that displays only the films with a score greater than 80 (Metascore)",
+        "type": "aggregate",
+        "query": [
+            {
+                "$match": {
+                    "Metascore": {"$gt": 80},
+                    "Revenue (Millions)": {"$gt": 50}
+                }
+            }
+        ]
+    },
+    "runtime_revenue_correlation_data": {
+        "description": "Calculate the correlation between film runtime and revenue",
+        "type": "find",
+        "query": {
+            "Runtime (Minutes)": {"$ne": None},
+            "Revenue (Millions)": {"$ne": None}
+        },
+        "projection": {
+            "_id": 0,
+            "Runtime (Minutes)": 1,
+            "Revenue (Millions)": 1
+        }
+    },
+    "average_runtime_by_decade": {
+        "description": "Check if average runtime of films changed by decade",
+        "type": "aggregate",
+        "query": [
+            {
+                "$match": {
+                    "year": {"$ne": None},
+                    "Runtime (Minutes)": {"$ne": None}
+                }
+            },
+            {
+                "$project": {
+                    "decade": {
+                        "$multiply": [
+                            { "$floor": { "$divide": ["$year", 10] } },
+                            10
+                        ]
+                    },
+                    "Runtime (Minutes)": 1
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$decade",
+                    "average_runtime": { "$avg": "$Runtime (Minutes)" },
+                    "count": { "$sum": 1 }
+                }
+            },
+            {
+                "$sort": { "_id": 1 }
+            }
+        ]
+    }
 }
