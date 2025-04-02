@@ -13,7 +13,7 @@ QUERIES = {
             {"$limit": 1}
         ]
     },
-    #TODO/TOFIX
+
     "films_after_1999": {
         "description": "Count films released after 1999",
         "type": "count",
@@ -71,7 +71,9 @@ QUERIES = {
             # Order by revenue in descending order, from highest to lowest
             {"$sort": {"Revenue (Millions)": -1}},
             # Take the first film
-            {"$limit": 1}
+            {"$limit": 1},
+            # Exclude the _rev field, if it exists (mongodb internal field)
+            {"$project": {"_rev": 0}}
         ]
     },
     "directors_with_multiple_films": {
@@ -114,7 +116,6 @@ QUERIES = {
             {"$limit": 1}
         ]
     },
-    #TODO/TOFIX
     "top_rated_by_decade": {
         "description": "Top 3 highest rated films by decade",
         "type": "aggregate",
@@ -139,9 +140,7 @@ QUERIES = {
                 "$group": {
                     "_id": "$decade",
                     "top_films": {
-                        "$push": {
-                            "title": "$title",
-                        }
+                        "$push": "$title"
                     }
                 }
             },
@@ -202,7 +201,7 @@ QUERIES = {
             }
         ]
     },
-    #TODO/TOFIX
+    #TODO/TOFIX: the correlation IS NOT CALCULATED
     "runtime_revenue_correlation_data": {
         "description": "Calculate the correlation between film runtime and revenue",
         "type": "find",

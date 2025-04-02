@@ -1,11 +1,3 @@
-""""
-
-25. Quel est le ”chemin” le plus court entre deux acteurs donn´es (ex : Tom Hanks et Scarlett
-Johansson) ?
-26. Analyser les communaut´es d’acteurs : Quels sont les groupes d’acteurs qui ont tendance `a
-travailler ensemble ? (Utilisation d’algorithmes de d´etection de communaut´e comme Louvain.)
-"""
-
 QUERIES = {
     "actor_most_films": {
         "description": "Actor with most films",
@@ -126,11 +118,96 @@ QUERIES = {
         "query":
             """
             MATCH (r1:Director)-[:DIRECTED]->(f:Film)-[:HAS_GENRE]->(g:Genre)<-[:HAS_GENRE]-(f2:Film)<-[:DIRECTED]-(r2:Director)
-            WHERE r1 <> r2
+            WHERE r1 <> r2 AND f <> f2
+            MERGE (r1)-[:INFLUENCED_BY {genre: g.name}]->(r2)
             RETURN DISTINCT r1.name AS director1, r2.name AS director2, g.name AS genre
             """
     },
+    #TODO/TOFIX mini error after
+    "shortest_path_between_actors": {
+        "description": "Shortest path between two actors",
+        "query":
+            """
+            MATCH p = shortestPath(
+            (a1:Actor {name: $actorName1})-[:ACTED_IN*]-(a2:Actor {name: $actorName2}))
+            RETURN p
+            """
+    },
+    "analyse_actors_communities": {
+        "description": "Analyse actors communities",
+        "query1":
+            """
+            CALL gds.graph.project(
+            'actors_graph',
+            ['Actor', 'Film'],
+            {
+                ACTED_IN: {
+                orientation: 'UNDIRECTED'
+                }
+            });
+            """,
+        "query2":
+            """
+            CALL gds.louvain.write('actors_graph', { writeProperty: 'community' });
+            """,
+        "query3":
+            """
+            MATCH (a:Actor)
+            RETURN a.name AS actor, a.community AS community
+            ORDER BY a.community;
+            """
+    },
 
-    
+    "films_same_genre_different_director": {
+        "description": "Films with the same genre but different directors",
+
+        "query":
+            """
+            MATCH (f1:Film)-[:HAS_GENRE]->(g:Genre)<-[:HAS_GENRE]-(f2:Film)
+            MATCH (f1:Film)<-[:DIRECTED]-(d1:Director), (f2:Film)<-[:DIRECTED]-(d2:Director)
+            WHERE d1 <> d2 AND f1 <> f2
+            RETURN DISTINCT f1.title AS film1, f2.title AS film2, g.name AS genre, d1.name AS director1, d2.name AS director2
+            """
+    },
+    "recommended_films_based_on_actor": {
+        "description": "Recommended films based on actor",
+
+        "query":
+            """
+            MATCH (a:Actor {name: $actorName})-[:ACTED_IN]->(f:Film)
+            RETURN DISTINCT f.title 
+            ORDER BY f.title
+            """
+    },
+    "directors_similar_films_per_year": {
+        "description": "Directors who produced similar films per year",
+
+        "query":
+            """
+            MATCH (d:Director)-[:DIRECTED]->(f:Film)-[:HAS_GENRE]->(g:Genre)<-[:HAS_GENRE]-(f2:Film)<-[:DIRECTED]-(d2:Director)
+            WHERE d <> d2 AND f.year = f2.year
+            MERGE (d)-[:COMPETES_WITH {year: f.year, genre: g.name}]->(d2)
+            RETURN d.name AS director1, d2.name AS director2, f.year AS year, g.name AS genre
+            ORDER BY year DESC;
+            """
+    },
+    "collaborations_for_votes_or_revenue": {
+        "description": "Collaborations between actors and directors based on revenue or votes",
+
+        "query":
+            """
+            MATCH (d:Director)-[:DIRECTED]->(f:Film)<-[:ACTED_IN]-(a:Actor)
+            WITH d, a, f,
+            AVG(f.revenue) AS avg_revenue, 
+            AVG(f.votes) AS avg_votes,
+            CASE 
+                WHEN AVG(f.revenue) > AVG(f.votes) THEN AVG(f.revenue)
+                ELSE AVG(f.votes)
+            END AS max_metric
+            ORDER BY max_metric DESC
+            RETURN d.name AS director, a.name AS actor, f.title, avg_revenue, avg_votes, max_metric
+            LIMIT 10
+            """
+    },
 
 }

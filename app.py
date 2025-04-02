@@ -1,30 +1,30 @@
 import streamlit as st
 from config import MONGODB_URI, DB_NAME, DB_COLLECTION, NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
-from mongodb_queries import QUERIES  # Import the QUERIES dictionary from mongodb_queries.py
-from neo4j_queries import QUERIES as NEO4J_QUERIES  # Import the QUERIES dictionary from neo4j_queries.py
+from mongodb_queries import QUERIES  
+from neo4j_queries import QUERIES as NEO4J_QUERIES  
 from pymongo import MongoClient
 from neo4j import GraphDatabase
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd 
 
-# Create sidebars with inputs for both MongoDB and Neo4j
-database_mode = st.sidebar.radio("Select Database", ["MongoDB", "Neo4j"]) # Create a selector for either MongoDB or Neo4j
-collection = None  # Initialize collection variable
+# Sidebar selection for database mode
+database_mode = st.sidebar.radio("Select Database", ["MongoDB", "Neo4j"])
+collection = None  
 
-# Executes MongoDB queries based on the selected query name and on its type (aggregate, count, find)
-def execute_mongo_query(
-    collection,
-    query_name: str,
-    limit: int = None,
-    result_as_dataframe: bool = True
-):
+# Function to execute MongoDB queries with optional parameters
+def execute_mongo_query(collection, query_name: str, limit: int = None, parameters: dict = None):
     if query_name not in QUERIES:
         raise ValueError(f"Unknown query: {query_name}")
     
     query_info = QUERIES[query_name]
     query = query_info["query"]
-    
+
+    # Replace placeholders in queries with provided parameters
+    if parameters:
+        for key, value in parameters.items():
+            query = query.replace(f"{{{key}}}", value)
+
     try:
         if query_info["type"] == "aggregate":
             result = list(collection.aggregate(query))
@@ -39,22 +39,23 @@ def execute_mongo_query(
             result = list(collection.find(**find_args))
         else:
             raise ValueError(f"Unsupported query type: {query_info['type']}")
-        
-        return pd.DataFrame(result) if result_as_dataframe and result else result
+
+        return pd.DataFrame(result) if result else result
     
     except Exception as e:
-        raise Exception(f"Error executing {query_name}: {str(e)}")
+        st.error(f"Error executing {query_name}: {str(e)}")
+        return None
 
 st.header("NoSQL Project - MongoDB and Neo4j Integration")
 
+# MongoDB section
 if database_mode == "MongoDB":
     st.sidebar.title("MongoDB")
     mongodb_host = MONGODB_URI
     mongodb_database = DB_NAME
     mongodb_collection = DB_COLLECTION
-    collection = None
 
-    # Connection to MongoDB
+    # Connect to MongoDB
     if mongodb_host and mongodb_database and mongodb_collection: 
         try:
             client = MongoClient(mongodb_host)
@@ -66,67 +67,37 @@ if database_mode == "MongoDB":
 
     st.header("Predefined MongoDB Queries")
     
-    # Crear opciones para el selectbox
-    query_options = {
-        f"{v['description']} ({k})": k 
-        for k, v in QUERIES.items()
-    }
+    # Create query options for the dropdown
+    query_options = {f"{v['description']} ({k})": k for k, v in QUERIES.items()}
     
-    selected_query_label = st.selectbox(
-        "Choose a predefined query:",
-        options=list(query_options.keys())
-    )
-    
-    # Obtener la clave real de la query seleccionada
+    selected_query_label = st.selectbox("Choose a predefined query:", options=list(query_options.keys()))
     query_key = query_options[selected_query_label]
     query_info = QUERIES[query_key]
-    
-    # Add limit parameter to find queries
-    limit = None
-    if query_info["type"] == "find":
-        limit = st.number_input(
-            "Maximum results to show", 
-            min_value=1, 
-            max_value=1000, 
-            value=10
-        )
-    
-    # Button to execute predefined queries
+
+    # Input fields for queries requiring parameters
+    query_parameters = {}
+    if query_key in ["films_by_director", "films_by_actor"]:
+        param_key = "director_name" if query_key == "films_by_director" else "actor_name"
+        query_parameters[param_key] = st.text_input(f"Enter {param_key.replace('_', ' ')}:")
+
+    # Limit parameter for 'find' queries
+    limit = st.number_input("Maximum results to show", min_value=1, max_value=1000, value=10) if query_info["type"] == "find" else None
+
+    # Button to execute the query
     if st.button(f"Execute: {selected_query_label.split(' (')[0]}"):
         if collection is None:
             st.error("No MongoDB connection established")
         else:
-            try:
-                result = execute_mongo_query(
-                    collection,
-                    query_name=query_key,
-                    limit=limit
-                )
-                
-                # Show results of query
-                if query_info["type"] == "count":
-                    st.metric(label=query_info["description"], value=result)
-                # Query 4: Create an histogram with the number of films per year
-                if query_key == "films_per_year":
-                    st.write(result)
-                    plt.figure(figsize=(12, 6))
-                    sns.barplot(x=result["_id"], y=result["titles"].apply(len), color="blue")
-                    plt.xticks(rotation=45)
-                    plt.xlabel("Year")
-                    plt.ylabel("Number of Films")
-                    plt.title("Number of Films Released per Year")
-
-                    st.pyplot(plt)
-                elif isinstance(result, pd.DataFrame):
+            result = execute_mongo_query(collection, query_key, limit, query_parameters)
+            if result is not None:
+                if isinstance(result, pd.DataFrame):
                     st.dataframe(result)
-            
+                elif isinstance(result, int):
+                    st.metric(label=query_info["description"], value=result)
                 else:
                     st.json(result)
-                    
-            except Exception as e:
-                st.error(f"Error executing query: {str(e)}")
 
-    # Custom queries input
+    # Custom query input
     st.header("Custom MongoDB Query")
     mongo_input = st.text_area("Enter MQL query (e.g., {'year': 2005})", height=100)
     
@@ -137,119 +108,95 @@ if database_mode == "MongoDB":
             st.warning("Please enter a MongoDB query.")
         else:
             try:
-                # Ejecutar query personalizada
                 safe_globals = {"__builtins__": {}}
                 safe_locals = {"collection": collection}
                 result = eval(mongo_input, safe_globals, safe_locals)
                 
-                # Convertir resultados
-                if hasattr(result, "__iter__") and not isinstance(result, dict):
-                    result = list(result)
-                
-                st.success("Query executed successfully.")
-                
-                # Mostrar resultados
                 if isinstance(result, list) and result:
                     df = pd.DataFrame(result)
                     st.dataframe(df)
-                    
-                    # Visualización automática para datos numéricos
-                    numeric_cols = df.select_dtypes(include=['number']).columns
-                    if not numeric_cols.empty:
-                        selected_col = st.selectbox("Select column to visualize", numeric_cols)
-                        fig, ax = plt.subplots()
-                        sns.histplot(df[selected_col].dropna(), ax=ax)
-                        st.pyplot(fig)
                 else:
                     st.write(result)
-                    
             except Exception as e:
                 st.error(f"Error executing command: {e}")
 
-# Database mode case for Neo4j
+# Neo4j section
 elif database_mode == "Neo4j":
-    # Connection details from config.py
     st.sidebar.title("Neo4j")  
     neo4j_host = NEO4J_URI
     neo4j_username = NEO4J_USERNAME
     neo4j_password = NEO4J_PASSWORD 
 
-    # Verify fields are filled 
+    # Connect to Neo4j
     if neo4j_host and neo4j_username and neo4j_password:
         try:
-            # Connect to Neo4j database
             driver = GraphDatabase.driver(neo4j_host, auth=(neo4j_username, neo4j_password))
-            st.success("Connected to Neo4j")  # Success message
-
+            st.success("Connected to Neo4j")
         except Exception as e:
             st.error(f"Failed to connect to Neo4j: {e}")  
-            driver = None  # Avoid executing queries if connection fails
+            driver = None  
 
     st.header("Predefined Neo4j Queries")
     
-    # Create options for the selectbox
-    query_options = {
-        f"{v['description']} ({k})": k 
-        for k, v in NEO4J_QUERIES.items()
-    }
+    # Create query options for the dropdown
+    query_options = {f"{v['description']} ({k})": k for k, v in NEO4J_QUERIES.items()}
     
-    selected_query_label = st.selectbox(
-        "Choose a predefined query:",
-        options=list(query_options.keys())
-    )
-    
-    # Obtain the real key of the selected query
+    selected_query_label = st.selectbox("Choose a predefined query:", options=list(query_options.keys()))
     query_key = query_options[selected_query_label]
     query_neo4j_info = NEO4J_QUERIES[query_key]
 
-    
-    # Button to execute predefined queries
+    # Input fields for parameterized queries
+    query_parameters = {}
+    if query_key == "recommended_films_based_on_actor":
+        query_parameters["actor_name"] = st.text_input("Enter actor name:")
+    elif query_key == "shortest_path_between_actors":
+        query_parameters["actor_name1"] = st.text_input("Enter first actor name:")
+        query_parameters["actor_name2"] = st.text_input("Enter second actor name:")
+
+    # Button to execute the query
     if st.button(f"Execute: {selected_query_label.split(' (')[0]}"):
         if driver is None:
             st.error("No Neo4j connection established")
         else:
             try:
                 with driver.session() as session:
-                    result = session.run(query_neo4j_info["query"])  # Execute the Cypher query
-                    data = [record.data() for record in result] # Transform result into a list of dictionaries
-            
-                if data:
-                    st.json(data)  
-                    df = pd.DataFrame(data)  
-                    st.dataframe(df)  # Show table in Streamlit
-                else:
-                    st.warning("No results found.")
+                    if query_key == "recommended_films_based_on_actor":
+                        result = session.run(query_neo4j_info["query"], actorName= query_parameters["actor_name"])
+                    elif query_key == "shortest_path_between_actors":
+                        result = session.run(query_neo4j_info["query"], actorName1=query_parameters["actor_name1"],
+                                            actorName2=query_parameters["actor_name2"])
+                    else:
+                        result = session.run(query_neo4j_info["query"])
+
+                    data = [record.data() for record in result]
+                    if data:
+                        st.json(data)
+                        df = pd.DataFrame(data)
+                        st.dataframe(df)
+                    else:
+                        st.warning("No results found.")
             except Exception as e:
-                print(e)
                 st.error(f"Error executing query: {str(e)}")
 
-    # Cypher query input
+    # Custom Cypher query input
     st.markdown("Enter a Neo4j query in Cypher format")
     neo4j_input = st.text_area("Cypher Query", height=100)
 
-    # Button to execute queries 
     if st.button("Run Cypher Command"):
         if driver is None:
             st.error("No active Neo4j connection.") 
         elif not neo4j_input.strip():
-            st.warning("Please enter a Cypher query.")  # No entry warning
+            st.warning("Please enter a Cypher query.")  
         else:
             try:
                 with driver.session() as session:
-                    result = session.run(neo4j_input) # Execute the Cypher query
-                    data = [record.data() for record in result]  # Transform result into a list of dictionaries
+                    result = session.run(neo4j_input)
+                    data = [record.data() for record in result]
 
-                    st.success("Query executed successfully.")  
-                    st.write(data)  # Show results
-
-                    # Transform data into a DataFrame for display
                     if data:
                         df = pd.DataFrame(data)
-                        st.dataframe(df)  # Show table in Streamlit
+                        st.dataframe(df)
                     else:
-                        st.info("Query returned no results.")  # No results warning
+                        st.info("Query returned no results.")
             except Exception as e:
-                st.error(f"Error executing Cypher query: {e}") 
-
-
-
+                st.error(f"Error executing Cypher query: {e}")  
