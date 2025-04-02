@@ -2,7 +2,6 @@ import streamlit as st
 from config import MONGODB_URI, DB_NAME, DB_COLLECTION, NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
 from mongodb_queries import QUERIES  # Import the QUERIES dictionary from mongodb_queries.py
 from neo4j_queries import QUERIES as NEO4J_QUERIES  # Import the QUERIES dictionary from neo4j_queries.py
-from neo4j_nodes import import_to_neo4j  # Import the function to export data from MongoDB to Neo4
 from pymongo import MongoClient
 from neo4j import GraphDatabase
 import matplotlib.pyplot as plt
@@ -127,7 +126,7 @@ if database_mode == "MongoDB":
             except Exception as e:
                 st.error(f"Error executing query: {str(e)}")
 
-    # Sección para queries personalizadas
+    # Custom queries input
     st.header("Custom MongoDB Query")
     mongo_input = st.text_area("Enter MQL query (e.g., {'year': 2005})", height=100)
     
@@ -181,35 +180,14 @@ elif database_mode == "Neo4j":
             # Connect to Neo4j database
             driver = GraphDatabase.driver(neo4j_host, auth=(neo4j_username, neo4j_password))
             st.success("Connected to Neo4j")  # Success message
-            collection = None  # Reset collection variable for Neo4j mode
 
-            # First establish MongoDB connection
-            try:
-                mongo_client = MongoClient(MONGODB_URI)
-                db = mongo_client[DB_NAME]
-                collection = db[DB_COLLECTION]
-                
-                # Add import button
-                if st.button("Import Data from MongoDB to Neo4j"):
-                    with st.spinner("Importing data..."):
-                        import_to_neo4j(driver, collection.find())
-                    st.success("Data imported successfully!")
-
-            except Exception as e:
-                st.error(f"Failed to connect to MongoDB: {e}")
-            
         except Exception as e:
             st.error(f"Failed to connect to Neo4j: {e}")  
             driver = None  # Avoid executing queries if connection fails
 
-    # Cypher query input
-
-    st.markdown("Enter a Neo4j query in Cypher format")
-    neo4j_input = st.text_area("Cypher Query", height=100)
-
     st.header("Predefined Neo4j Queries")
     
-    # Crear opciones para el selectbox
+    # Create options for the selectbox
     query_options = {
         f"{v['description']} ({k})": k 
         for k, v in NEO4J_QUERIES.items()
@@ -220,43 +198,34 @@ elif database_mode == "Neo4j":
         options=list(query_options.keys())
     )
     
-    # Obtener la clave real de la query seleccionada
+    # Obtain the real key of the selected query
     query_key = query_options[selected_query_label]
-    query_info = NEO4J_QUERIES[query_key]
-    
-    # Add limit parameter to find queries
-    limit = None
-    if query_info["type"] == "find":
-        limit = st.number_input(
-            "Maximum results to show", 
-            min_value=1, 
-            max_value=1000, 
-            value=10
-        )
+    query_neo4j_info = NEO4J_QUERIES[query_key]
+
     
     # Button to execute predefined queries
     if st.button(f"Execute: {selected_query_label.split(' (')[0]}"):
-        if collection is None:
+        if driver is None:
             st.error("No Neo4j connection established")
         else:
             try:
                 with driver.session() as session:
-                    result = session.run(query_info["query"])  # Execute the Cypher query
-                    data = list(result)  # Transform result into a list of dictionaries
-                
-                # Show results of query
-                if query_info["type"] == "count":
-                    st.metric(label=query_info["description"], value=result)
+                    result = session.run(query_neo4j_info["query"])  # Execute the Cypher query
+                    data = [record.data() for record in result] # Transform result into a list of dictionaries
             
-                elif isinstance(result, pd.DataFrame):
-                    st.dataframe(result)
-            
+                if data:
+                    st.json(data)  
+                    df = pd.DataFrame(data)  
+                    st.dataframe(df)  # Show table in Streamlit
                 else:
-                    st.json(result)
-                    
+                    st.warning("No results found.")
             except Exception as e:
+                print(e)
                 st.error(f"Error executing query: {str(e)}")
 
+    # Cypher query input
+    st.markdown("Enter a Neo4j query in Cypher format")
+    neo4j_input = st.text_area("Cypher Query", height=100)
 
     # Button to execute queries 
     if st.button("Run Cypher Command"):
