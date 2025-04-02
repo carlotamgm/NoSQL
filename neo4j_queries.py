@@ -75,7 +75,6 @@ QUERIES = {
             LIMIT 1
             """
     },
-    #CHECK TODO/TOFIX
     "most_connected_films": {
         "description": "Most connected films",
 
@@ -123,7 +122,6 @@ QUERIES = {
             RETURN DISTINCT r1.name AS director1, r2.name AS director2, g.name AS genre
             """
     },
-    #TODO/TOFIX mini error after
     "shortest_path_between_actors": {
         "description": "Shortest path between two actors",
         "query":

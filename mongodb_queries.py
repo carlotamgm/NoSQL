@@ -201,7 +201,6 @@ QUERIES = {
             }
         ]
     },
-    #TODO/TOFIX: the correlation IS NOT CALCULATED
     "runtime_revenue_correlation_data": {
         "description": "Calculate the correlation between film runtime and revenue",
         "type": "find",
